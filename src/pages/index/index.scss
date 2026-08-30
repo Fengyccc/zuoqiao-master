@@ -1,0 +1,188 @@
+.page {
+  min-height: 100vh;
+  padding: 32px 24px 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.hero {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.title {
+  display: block;
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #fff;
+}
+
+.subtitle {
+  display: block;
+  margin-top: 8px;
+  font-size: 24px;
+  color: #9aa0b5;
+}
+
+/* ---- 展开图 ---- */
+.net {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  background: #23233a;
+  border-radius: 16px;
+}
+
+.net-row {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.face-label {
+  font-size: 20px;
+  color: #9aa0b5;
+}
+
+.face-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 30px);
+  grid-template-rows: repeat(3, 30px);
+  gap: 2px;
+  padding: 2px;
+  background: #111;
+  border-radius: 6px;
+}
+
+.sticker {
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
+}
+
+/* ---- 信息卡 ---- */
+.info {
+  width: 100%;
+  max-width: 640px;
+  margin-top: 20px;
+  padding: 16px 20px;
+  background: #23233a;
+  border-radius: 12px;
+  box-sizing: border-box;
+}
+
+.info.solution {
+  border: 1px solid #3f51b5;
+}
+
+.info-label {
+  display: block;
+  font-size: 22px;
+  color: #9aa0b5;
+  margin-bottom: 8px;
+}
+
+.info-text {
+  display: block;
+  font-size: 30px;
+  line-height: 1.5;
+  color: #fff;
+  word-break: break-all;
+}
+
+.info-sub {
+  display: block;
+  margin-top: 8px;
+  font-size: 22px;
+  color: #9aa0b5;
+}
+
+/* ---- 按钮 ---- */
+.actions {
+  width: 100%;
+  max-width: 640px;
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.btn {
+  width: 100%;
+  font-size: 30px;
+  border-radius: 12px;
+}
+
+.btn.primary {
+  background: #3f51b5;
+  color: #fff;
+}
+
+.btn.ghost {
+  background: transparent;
+  color: #9aa0b5;
+  border: 1px solid #3a3d55;
+}
+
+/* ---- 打乱卡片头部（label + 复制按钮）与导入 ---- */
+.info-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.info-row .info-label {
+  margin-bottom: 0;
+}
+
+.btn-mini {
+  margin: 0;
+  padding: 0 24px;
+  font-size: 24px;
+  line-height: 2;
+  border-radius: 8px;
+  background: #3a3d55;
+  color: #fff;
+}
+
+.btn-mini.active {
+  background: #3f51b5;
+}
+
+.bottom-pair-options {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.import-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.import-input {
+  flex: 1;
+  height: 68px;
+  padding: 0 16px;
+  font-size: 26px;
+  color: #fff;
+  background: #1b1b2e;
+  border-radius: 8px;
+}
