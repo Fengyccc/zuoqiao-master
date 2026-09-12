@@ -26,7 +26,16 @@ export default function Timer() {
   const [solves, setSolves] = useState<Solve[]>(() => {
     try {
       const v = Taro.getStorageSync(SOLVES_KEY)
-      return Array.isArray(v) ? (v as Solve[]) : []
+      if (!Array.isArray(v)) return []
+      // 过滤脏数据（旧版本/异常写入导致的字段缺失会让序号与时间渲染成乱码）
+      return (v as Solve[]).filter(
+        (s) =>
+          s &&
+          typeof s.time === 'number' &&
+          Number.isFinite(s.time) &&
+          typeof s.timestamp === 'number' &&
+          typeof s.scramble === 'string',
+      )
     } catch {
       return []
     }
@@ -156,7 +165,7 @@ export default function Timer() {
           <Text className='solves-empty'>暂无成绩</Text>
         ) : (
           solves.map((s, i) => (
-            <View className='solve-item' key={s.timestamp}>
+            <View className='solve-item' key={`${s.timestamp}-${i}`}>
               <Text className='solve-index'>{solves.length - i}</Text>
               <Text className='solve-time'>{formatTime(s.time)}</Text>
               <Text className='solve-scramble'>{s.scramble}</Text>

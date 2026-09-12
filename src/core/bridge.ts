@@ -36,11 +36,9 @@ import {
 } from './cube';
 import { faceletToFbCoordGeneric, solvedFbCoordWithOrientations, applyMoveToFb } from './fb';
 import { fbDistanceTo } from './fbSolver';
+import { moveCost, scoreFingertrick, type Grip } from './fingertrick';
 
 const COLOR_NAMES = ['白', '红', '绿', '黄', '橙', '蓝'] as const;
-
-/** 左手（L 层）转动的代价权重；右手/其它 = 1。可调。 */
-export const LEFT_WEIGHT = 3;
 
 /** DR 最佳解的带权代价放宽窗口：在「最短代价 + DR_SLACK」内寻找 DR 位置更好的解。可调。 */
 export const DR_SLACK = 2;
@@ -313,10 +311,6 @@ const WIDE_ORIENT: { gen: number; double: boolean }[] = [
   { gen: 3, double: false }, { gen: 2, double: true }, { gen: 2, double: false }, // b b2 b'
 ];
 
-function isLeftHand(move: number): boolean {
-  return move === 9 || move === 10 || move === 11 || move === 30 || move === 31 || move === 32;
-}
-
 // ---- 带权 A*（二叉最小堆） ----
 interface HeapNode {
   f: number;
@@ -378,7 +372,6 @@ function keyOf(coord: number, orient: number, drPos: number, drOri: number): num
 
 interface GoalRecord {
   cost: number;
-  leftHand: number;
   drPos: number;
   drOri: number;
   moves: number[];
@@ -420,14 +413,17 @@ function replayDr(
 function toSolution(
   moves: number[],
   cost: number,
-  leftHand: number,
   dr: { pos: number; ori: number; trajectory: number[] },
 ): BridgeSolution {
+  const ft = scoreFingertrick(moves);
   return {
     moves,
     totalMoves: moves.length,
-    leftHandMoves: leftHand,
+    leftHandMoves: ft.leftHandMoves,
     cost,
+    regripCount: ft.regrips,
+    initialGrip: ft.grip,
+    fingertrickCost: ft.cost,
     drPos: dr.pos,
     drOri: dr.ori,
     drTier: drTier(dr.pos, dr.ori),
@@ -441,9 +437,11 @@ function solveConfig(
   targetCoord: number,
   targetOrient: number,
   startOrient: number,
-): { moves: number[]; cost: number; leftHand: number } | null {
+): { moves: number[]; cost: number } | null {
   const targetKey = targetCoord * 24 + targetOrient;
   const startKey = startCoord * 24 + startOrient;
+  // 已处于目标态时直接返回，避免构建距离表（未打乱时点「求解左桥」卡死的根因）。
+  if (startKey === targetKey) return { moves: [], cost: 0 };
   const h = (coord: number): number => fbDistanceTo(coord, targetCoord);
 
   const gBest = new Map<number, number>();
@@ -456,17 +454,8 @@ function solveConfig(
   while (heap.size > 0) {
     const node = heap.pop()!;
     if (node.key === targetKey) {
-      const moves: number[] = [];
-      let leftHand = 0;
-      let k = node.key;
-      while (k !== startKey) {
-        const p = parent.get(k)!;
-        moves.push(p.move);
-        if (isLeftHand(p.move)) leftHand++;
-        k = p.key;
-      }
-      moves.reverse();
-      return { moves, cost: node.g, leftHand };
+      const moves = reconstructMoves(parent, startKey, node.key);
+      return { moves, cost: node.g };
     }
     if ((gBest.get(node.key) ?? Infinity) < node.g) continue;
 
@@ -479,7 +468,7 @@ function solveConfig(
         newOrient = GEN_APPLY[info.gen][node.orient];
         if (info.double) newOrient = GEN_APPLY[info.gen][newOrient];
       }
-      const newG = node.g + (isLeftHand(move) ? LEFT_WEIGHT : 1);
+      const newG = node.g + moveCost(move);
       const newKey = newCoord * 24 + newOrient;
       if ((gBest.get(newKey) ?? Infinity) <= newG) continue;
       gBest.set(newKey, newG);
@@ -501,6 +490,9 @@ function aStarDr(
   goalTier: 0 | 1,
   cap: number,
 ): GoalRecord | null {
+  if (startCoord === targetCoord && startOrient === targetOrient && drTier(drPos0, drOri0) === goalTier) {
+    return { cost: 0, drPos: drPos0, drOri: drOri0, moves: [] };
+  }
   const h = (coord: number): number => fbDistanceTo(coord, targetCoord);
   const startKey = keyOf(startCoord, startOrient, drPos0, drOri0);
 
@@ -521,9 +513,7 @@ function aStarDr(
       drTier(node.drPos, node.drOri) === goalTier
     ) {
       const moves = reconstructMoves(parent, startKey, node.key);
-      let leftHand = 0;
-      for (const m of moves) if (isLeftHand(m)) leftHand++;
-      return { cost: node.g, leftHand, drPos: node.drPos, drOri: node.drOri, moves };
+      return { cost: node.g, drPos: node.drPos, drOri: node.drOri, moves };
     }
     if ((gBest.get(node.key) ?? Infinity) < node.g) continue;
 
@@ -538,7 +528,7 @@ function aStarDr(
       }
       const newDrPos = EDGE_PERM[move][node.drPos];
       const newDrOri = node.drOri ^ EDGE_ORI[move][node.drPos];
-      const newG = node.g + (isLeftHand(move) ? LEFT_WEIGHT : 1);
+      const newG = node.g + moveCost(move);
       if (newG > cap) continue; // 超出上限，剪枝
       const newKey = keyOf(newCoord, newOrient, newDrPos, newDrOri);
       if ((gBest.get(newKey) ?? Infinity) <= newG) continue;
@@ -571,7 +561,7 @@ function solveConfigWithDr(
   const fast = solveConfig(startCoord, targetCoord, targetOrient, startOrient);
   if (!fast) return null;
   const dr0 = replayDr(fast.moves, drPos0, drOri0);
-  const shortest = toSolution(fast.moves, fast.cost, fast.leftHand, dr0);
+  const shortest = toSolution(fast.moves, fast.cost, dr0);
   const t0 = drTier(dr0.pos, dr0.ori);
 
   // DR 最佳：逐 tier（0 优于 1）在「最短代价 + DR_SLACK」内找 DR 位置更好的解
@@ -581,7 +571,7 @@ function solveConfigWithDr(
     for (let tier = 0; tier < t0; tier++) {
       const rec = aStarDr(startCoord, targetCoord, targetOrient, startOrient, drPos0, drOri0, tier as 0 | 1, cap);
       if (rec) {
-        drBest = toSolution(rec.moves, rec.cost, rec.leftHand, replayDr(rec.moves, drPos0, drOri0));
+        drBest = toSolution(rec.moves, rec.cost, replayDr(rec.moves, drPos0, drOri0));
         break;
       }
     }
@@ -594,8 +584,11 @@ function solveConfigWithDr(
 export interface BridgeSolution {
   moves: number[]; // move id（纯面转 0–17）
   totalMoves: number;
-  leftHandMoves: number;
+  leftHandMoves: number; // 左手转动次数（L + F'）
   cost: number;
+  regripCount: number; // 换手次数（最优起手下）
+  initialGrip: Grip; // 最优起手（up/neutral/down）
+  fingertrickCost: number; // 顺手度总分 = Σ moveCost + REGRIP_COST × 换手次数
   drPos: number; // 做完左桥后 DR 棱所在位置（0-11）
   drOri: number; // DR 棱色相（0=好，1=坏）
   drTier: number; // 位置分级 0/1/2
@@ -626,11 +619,12 @@ export function solveBridges(facelet: Facelet, bottoms: [number, number] = [0, 3
     if (!solved) continue;
     results.push({ config, connectedPairs, shortest: solved.shortest, drBest: solved.drBest });
   }
-  // 排序：带权代价（左手少 + 步数少）升序，再连色对多者优先
+  // 排序：带权代价（B 层权重高 + 左手多）升序 → 步数少 → 换手少 → 连色对多者优先
   results.sort(
     (a, b) =>
       a.shortest.cost - b.shortest.cost ||
       a.shortest.totalMoves - b.shortest.totalMoves ||
+      a.shortest.regripCount - b.shortest.regripCount ||
       b.connectedPairs - a.connectedPairs,
   );
   return results;

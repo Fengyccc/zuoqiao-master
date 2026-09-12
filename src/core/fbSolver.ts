@@ -5,7 +5,7 @@
  * 暂不纳入，后续扩展时再处理。
  */
 
-import { applyMoveToFb, solvedFbCoord, faceletToFbCoord, FB_COORD_SPACE } from './fb';
+import { applyMoveToFb, solvedFbCoord, faceletToFbCoord, FB_COORD_SPACE, isHomePositions, mapToSolvedFrame } from './fb';
 
 export const FB_MOVE_COUNT = 18;
 
@@ -70,6 +70,15 @@ export function fbDistance(coord: number): number {
 
 /** 某个 FB 坐标到「指定目标坐标」的最短面转步数（可采纳启发式） */
 export function fbDistanceTo(coord: number, targetCoord: number): number {
+  // 桥配置的目标坐标都处于 home 位置（仅朝向不同），可复用单一「标准已还原」距离表：
+  // 把 coord 的朝向平移到标准参照系（棱按位 XOR、角 mod-3 相减），直接查 solved 表，省去第二次 BFS。
+  if (isHomePositions(targetCoord)) {
+    const d = buildDistanceTable();
+    const dist = d[mapToSolvedFrame(coord, targetCoord)];
+    if (dist === 255) throw new Error('FB 坐标不可达（可能不是物理打乱状态）');
+    return dist;
+  }
+  // 通用目标坐标（当前未使用）：惰性构建专用距离表。
   const d = buildDistanceTableFrom(targetCoord);
   const dist = d[coord];
   if (dist === 255) throw new Error('FB 坐标不可达（可能不是物理打乱状态）');

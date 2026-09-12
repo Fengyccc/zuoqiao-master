@@ -134,38 +134,88 @@ export function solvedFbCoordWithOrientations(
   return edgePerm | (edgeOriBits << 11) | (cornerPerm << 14) | (cornerOriBits << 20);
 }
 
-/** 对 FB 坐标应用一个转动，返回新坐标（位运算解码，高频调用） */
+// ---- home 位置常量与「标准参照系」映射 ----
+
+const HOME_EDGE_PERM = encodePerm3([7, 9, 11], 12); // DL=7, FL=9, BL=11
+const HOME_CORNER_PERM = encodePerm2([7, 6], 8); // DLF=7, DBL=6
+
+/** 该坐标的 5 个 piece 是否都位于 home 位置（即「某朝向下的已还原」坐标） */
+export function isHomePositions(coord: number): boolean {
+  return (coord & 0x7ff) === HOME_EDGE_PERM && ((coord >> 14) & 0x3f) === HOME_CORNER_PERM;
+}
+
+/**
+ * 把 coord 映射到「标准已还原（朝向全 0）」参照系：减去 targetCoord 的朝向偏移（棱按位 XOR、角 mod-3 相减），位置不变。
+ * 仅当 targetCoord 处于 home 位置时有效。移动群对朝向的作用与逐块朝向偏移可交换，
+ * 故 dist(coord, targetCoord) == dist(mapToSolvedFrame(coord, targetCoord), solvedFbCoord)。
+ */
+export function mapToSolvedFrame(coord: number, targetCoord: number): number {
+  const edgeOri = ((coord >> 11) & 0x7) ^ ((targetCoord >> 11) & 0x7);
+  const cornerOri = (coord >> 20) & 0xf;
+  const tCornerOri = (targetCoord >> 20) & 0xf;
+  const co0 = cornerOri % 3;
+  const co1 = (cornerOri - co0) / 3;
+  const tco0 = tCornerOri % 3;
+  const tco1 = (tCornerOri - tco0) / 3;
+  const nco0 = (co0 - tco0 + 3) % 3;
+  const nco1 = (co1 - tco1 + 3) % 3;
+  // 清除朝向位（bits 11-13 棱、bits 20-23 角），保留位置位
+  const cleared = coord & (0xffffff & ~((0x7 << 11) | (0xf << 20)));
+  return cleared | (edgeOri << 11) | ((nco0 + 3 * nco1) << 20);
+}
+
+// ---- 预计算转动迁移表（消除 applyMoveToFb 高频调用里的排列解码/编码与除法/取模） ----
+// 由 cube.ts 的 EDGE_PERM/EDGE_ORI/CORNER_PERM/CORNER_ORI 一次性推导，模块加载时构建。
+
+const EDGE_PERM_TRANS: Uint16Array[] = [];
+const EDGE_FLIP: Uint8Array[] = [];
+const CORNER_PERM_TRANS: Uint8Array[] = [];
+const CORNER_ORI_ADD: Uint8Array[] = [];
+
+(function buildTransitionTables() {
+  const moveCount = EDGE_PERM.length;
+  for (let m = 0; m < moveCount; m++) {
+    const ep = new Uint16Array(1320);
+    const ef = new Uint8Array(1320);
+    for (let p = 0; p < 1320; p++) {
+      const [e0, e1, e2] = decodePerm3(p, 12);
+      ep[p] = encodePerm3([EDGE_PERM[m][e0], EDGE_PERM[m][e1], EDGE_PERM[m][e2]], 12);
+      ef[p] = EDGE_ORI[m][e0] | (EDGE_ORI[m][e1] << 1) | (EDGE_ORI[m][e2] << 2);
+    }
+    EDGE_PERM_TRANS.push(ep);
+    EDGE_FLIP.push(ef);
+
+    const cp = new Uint8Array(56);
+    const ca = new Uint8Array(56 * 9);
+    for (let p = 0; p < 56; p++) {
+      const [c0, c1] = decodePerm2(p, 8);
+      cp[p] = encodePerm2([CORNER_PERM[m][c0], CORNER_PERM[m][c1]], 8);
+      const d0 = CORNER_ORI[m][c0];
+      const d1 = CORNER_ORI[m][c1];
+      for (let o = 0; o < 9; o++) {
+        const co0 = o % 3;
+        const co1 = (o - co0) / 3;
+        ca[p * 9 + o] = ((co0 + d0) % 3) + 3 * ((co1 + d1) % 3);
+      }
+    }
+    CORNER_PERM_TRANS.push(cp);
+    CORNER_ORI_ADD.push(ca);
+  }
+})();
+
+/** 对 FB 坐标应用一个转动，返回新坐标（查表，高频调用） */
 export function applyMoveToFb(coord: number, move: number): number {
   const edgePerm = coord & 0x7ff;
   const edgeOri = (coord >> 11) & 0x7;
   const cornerPerm = (coord >> 14) & 0x3f;
   const cornerOri = (coord >> 20) & 0xf;
 
-  const [e0, e1, e2] = decodePerm3(edgePerm, 12);
-  const eo0 = edgeOri & 1;
-  const eo1 = (edgeOri >> 1) & 1;
-  const eo2 = (edgeOri >> 2) & 1;
-  const [c0, c1] = decodePerm2(cornerPerm, 8);
-  const co0 = cornerOri % 3;
-  const co1 = (cornerOri - co0) / 3;
+  const newEdgePerm = EDGE_PERM_TRANS[move][edgePerm];
+  const newEdgeOri = edgeOri ^ EDGE_FLIP[move][edgePerm];
+  const newCornerPerm = CORNER_PERM_TRANS[move][cornerPerm];
+  const newCornerOri = CORNER_ORI_ADD[move][cornerPerm * 9 + cornerOri];
 
-  const ne0 = EDGE_PERM[move][e0];
-  const neo0 = eo0 ^ EDGE_ORI[move][e0];
-  const ne1 = EDGE_PERM[move][e1];
-  const neo1 = eo1 ^ EDGE_ORI[move][e1];
-  const ne2 = EDGE_PERM[move][e2];
-  const neo2 = eo2 ^ EDGE_ORI[move][e2];
-  const nc0 = CORNER_PERM[move][c0];
-  const nco0 = (co0 + CORNER_ORI[move][c0]) % 3;
-  const nc1 = CORNER_PERM[move][c1];
-  const nco1 = (co1 + CORNER_ORI[move][c1]) % 3;
-
-  const nEdgePerm = encodePerm3([ne0, ne1, ne2], 12);
-  const nEdgeOri = neo0 | (neo1 << 1) | (neo2 << 2);
-  const nCornerPerm = encodePerm2([nc0, nc1], 8);
-  const nCornerOri = nco0 + 3 * nco1;
-
-  return nEdgePerm | (nEdgeOri << 11) | (nCornerPerm << 14) | (nCornerOri << 20);
+  return newEdgePerm | (newEdgeOri << 11) | (newCornerPerm << 14) | (newCornerOri << 20);
 }
 
 /** 解码 FB 坐标成 5 个 piece 的位置/朝向（供调试与解释使用） */

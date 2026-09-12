@@ -13,6 +13,7 @@ import {
 import { faceletToCubie, EDGE_FACES, CORNER_FACES, EDGE_PERM, EDGE_ORI } from '../src/core/cube';
 import { randomScramble, scrambleToFacelet } from '../src/core/scramble';
 import { movesToString } from '../src/core/notation';
+import { moveCost } from '../src/core/fingertrick';
 import {
   buildBridgeConfigs,
   connectedPairCount,
@@ -20,7 +21,6 @@ import {
   selectBest,
   applyWholeRotation,
   orientLabel,
-  LEFT_WEIGHT,
   DR_SLACK,
   EDGE_POS_NAMES,
   drTier,
@@ -170,9 +170,9 @@ describe('多桥求解（带权 A*）', () => {
       for (const r of results) {
         const final = applyMoves(applyWholeRotation(f, r.config.targetOrient), r.shortest.moves);
         expectBlockSolved(final, r.config);
-        // 代价 = 右手(1) + 左手(LEFT_WEIGHT) 的加权和
+        // 代价 = Σ moveCost(m)（L=3、B=2、其余=1）
         expect(r.shortest.cost).toBe(
-          r.shortest.totalMoves - r.shortest.leftHandMoves + LEFT_WEIGHT * r.shortest.leftHandMoves,
+          r.shortest.moves.reduce((s, m) => s + moveCost(m), 0),
         );
       }
     }

@@ -5,7 +5,7 @@
 /** 去掉最好与最坏，剩余取平均（csTimer ao5/ao12 规则）。不足 size 个返回 null */
 export function averageOf(times: number[], size: number): number | null {
   if (times.length < size) return null;
-  const window = times.slice(-size);
+  const window = times.slice(0, size); // 成绩数组为「最新在前」，取最近 size 条
   const sorted = [...window].sort((a, b) => a - b);
   const trimmed = sorted.slice(1, -1);
   const sum = trimmed.reduce((a, b) => a + b, 0);

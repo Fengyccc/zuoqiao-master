@@ -13,6 +13,7 @@ import {
   EDGE_POS_NAMES,
   drTierLabel,
   orientLabel,
+  gripLabel,
   BOTTOM_PAIRS,
   type Facelet,
   type BridgeChoice,
@@ -215,7 +216,7 @@ export default function Index() {
               : movesToString(solution.best.shortest.moves)}
           </Text>
           <Text className='info-sub'>
-            坐标 {orientLabel(solution.best.config.targetOrient)} · 左手 {solution.best.shortest.leftHandMoves} 次 · 连色对 {solution.best.connectedPairs} 组
+            坐标 {orientLabel(solution.best.config.targetOrient)} · 左手 {solution.best.shortest.leftHandMoves} 次 · 换手 {solution.best.shortest.regripCount} 次 · 起手 {gripLabel(solution.best.shortest.initialGrip)} · 连色对 {solution.best.connectedPairs} 组
           </Text>
           <Text className='info-sub'>{drInfoText(solution.best.shortest)}</Text>
         </View>
@@ -228,7 +229,7 @@ export default function Index() {
           </Text>
           <Text className='info-text'>{movesToString(solution.best.drBest.moves)}</Text>
           <Text className='info-sub'>
-            坐标 {orientLabel(solution.best.config.targetOrient)} · 左手 {solution.best.drBest.leftHandMoves} 次 · {drInfoText(solution.best.drBest)}
+            坐标 {orientLabel(solution.best.config.targetOrient)} · 左手 {solution.best.drBest.leftHandMoves} 次 · 换手 {solution.best.drBest.regripCount} 次 · 起手 {gripLabel(solution.best.drBest.initialGrip)} · {drInfoText(solution.best.drBest)}
           </Text>
         </View>
       ) : null}
@@ -240,7 +241,7 @@ export default function Index() {
           </Text>
           <Text className='info-text'>{movesToString(solution.alternative.shortest.moves)}</Text>
           <Text className='info-sub'>
-            坐标 {orientLabel(solution.alternative.config.targetOrient)} · 左手 {solution.alternative.shortest.leftHandMoves} 次 · 连色对 {solution.alternative.connectedPairs} 组
+            坐标 {orientLabel(solution.alternative.config.targetOrient)} · 左手 {solution.alternative.shortest.leftHandMoves} 次 · 换手 {solution.alternative.shortest.regripCount} 次 · 起手 {gripLabel(solution.alternative.shortest.initialGrip)} · 连色对 {solution.alternative.connectedPairs} 组
           </Text>
         </View>
       ) : null}

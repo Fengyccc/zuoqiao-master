@@ -8,6 +8,7 @@ export * from './cube';
 export * from './fb';
 export * from './fbSolver';
 export * from './bridge';
+export * from './fingertrick';
 export * from './scramble';
 export * from './notation';
 export * from './net';
